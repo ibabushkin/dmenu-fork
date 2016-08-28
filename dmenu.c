@@ -530,6 +530,7 @@ setup(void)
 {
 	int x, y;
 	XSetWindowAttributes swa;
+	XWindowChanges wch;
 	XIM xim;
 #ifdef XINERAMA
 	XineramaScreenInfo *info;
@@ -577,15 +578,15 @@ setup(void)
 					break;
 
 		x = info[i].x_org + dmx;
-		y = info[i].y_org + (topbar ? dmy : info[i].height - mh - dmy);
-		mw = (dmw>0 ? dmw : info[i].width);
+		y = info[i].y_org + (topbar ? dmy : info[i].height - (mh + 2) - dmy);
+		mw = (dmw>0 ? dmw : info[i].width - 2);
 		XFree(info);
 	} else
 #endif
 	{
 		x = dmx;
-		y = topbar ? dmy : sh - mh - dmy;
-		mw = (dmw>0 ? dmw : sw);
+		y = topbar ? dmy : sh - (mh + 2) - dmy;
+		mw = (dmw>0 ? dmw : sw - 2);
 	}
 	promptw = (prompt && *prompt) ? TEXTW(prompt) - lrpad / 4 : 0;
 	inputw = MIN(inputw, mw/3);
@@ -594,11 +595,15 @@ setup(void)
 	/* create menu window */
 	swa.override_redirect = True;
 	swa.background_pixel = scheme[SchemeNorm][ColBg].pixel;
+	swa.border_pixel = scheme[SchemeSel][ColBg].pixel;
 	swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask;
 	win = XCreateWindow(dpy, root, x, y, mw, mh, 0,
-	                    DefaultDepth(dpy, screen), CopyFromParent,
-	                    DefaultVisual(dpy, screen),
-	                    CWOverrideRedirect | CWBackPixel | CWEventMask, &swa);
+			DefaultDepth(dpy, screen), CopyFromParent,
+			DefaultVisual(dpy, screen),
+			CWOverrideRedirect | CWBackPixel | CWBorderPixel | CWEventMask,
+			&swa);
+	wch.border_width = 1;
+	XConfigureWindow(dpy, win, CWBorderWidth, &wch);
 
 	/* open input methods */
 	xim = XOpenIM(dpy, NULL, NULL, NULL);
