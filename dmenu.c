@@ -244,6 +244,11 @@ match(void)
 		matchend = substrend;
 	}
 	curr = sel = matches;
+	if (instant && matches && matches == matchend && !lsubstr) {
+		puts(matches->text);
+		cleanup();
+		exit(0);
+	}
 	calcoffsets();
 }
 
@@ -641,6 +646,8 @@ main(int argc, char *argv[])
 		else if (!strcmp(argv[i], "-i")) { /* case-insensitive item matching */
 			fstrncmp = strncasecmp;
 			fstrstr = cistrstr;
+		} else if (!strcmp(argv[i], "-n")) { /* instant match */
+			instant = !instant;
 		} else if (i + 1 == argc)
 			usage();
 		/* these options take one argument */

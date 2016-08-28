@@ -10,6 +10,7 @@ dmenu \- dynamic menu
 .RB [ \-m
 .IR monitor ]
 .IR lines ]
+.RB [ \-n ]
 .RB [ \-p
 .IR prompt ]
 .RB [ \-fn
@@ -72,6 +73,9 @@ sets the width of the dmenu window.
 .BI \-m " monitor"
 dmenu is displayed on the monitor number supplied. Monitor numbers are starting
 from 0.
+.TP
+.BI \-n
+instant match, end dmenu if there is only one match left.
 .TP
 .BI \-p " prompt"
 defines the prompt to be displayed to the left of the input field.
