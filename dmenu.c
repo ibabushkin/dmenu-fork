@@ -244,7 +244,7 @@ match(void)
 		matchend = substrend;
 	}
 	curr = sel = matches;
-	if (instant && matches && matches == matchend && !lsubstr) {
+	if (instant && matches && matches == matchend) {
 		puts(matches->text);
 		cleanup();
 		exit(0);
