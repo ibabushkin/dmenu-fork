@@ -2,7 +2,7 @@
 /* Default settings; can be overriden by command line. */
 
 static int topbar = 1;                      /* -b  option; if 0, dmenu appears at bottom     */
-static int instant = 1;                     /* -n  option; if 1, dmenu ends immediately on a distinct match */
+static int instant = 0;                     /* -n  option; if 1, dmenu ends immediately on a distinct match */
 /* -fn option overrides fonts[0]; default X11 font or font set */
 static const char *fonts[] = {
 	"terminus:size=8"
