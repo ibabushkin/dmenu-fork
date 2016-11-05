@@ -34,8 +34,8 @@ struct item {
 };
 
 static char text[BUFSIZ] = "";
+static char *embed;
 static int bh, mw, mh;
-static int sw, sh; /* X display screen geometry width, height */
 static int inputw = 0, promptw;
 static int lrpad; /* sum of left and right padding */
 static int dmx = 0; /* put dmenu at this x offset */
@@ -49,7 +49,7 @@ static int mon = -1, screen;
 
 static Atom clip, utf8;
 static Display *dpy;
-static Window root, win;
+static Window root, parentwin, win;
 static XIC xic;
 
 static Drw *drw;
@@ -178,11 +178,30 @@ drawmenu(void)
 }
 
 static void
+grabfocus(void)
+{
+	struct timespec ts = { .tv_sec = 0, .tv_nsec = 10000000  };
+	Window focuswin;
+	int i, revertwin;
+
+	for (i = 0; i < 100; ++i) {
+		XGetInputFocus(dpy, &focuswin, &revertwin);
+		if (focuswin == win)
+			return;
+		XSetInputFocus(dpy, win, RevertToParent, CurrentTime);
+		nanosleep(&ts, NULL);
+	}
+	die("cannot grab focus");
+}
+
+static void
 grabkeyboard(void)
 {
 	struct timespec ts = { .tv_sec = 0, .tv_nsec = 1000000  };
 	int i;
 
+	if (embed)
+		return;
 	/* try to grab keyboard, we may have to wait for another process to ungrab */
 	for (i = 0; i < 1000; i++) {
 		if (XGrabKeyboard(dpy, DefaultRootWindow(dpy), True, GrabModeAsync,
@@ -515,6 +534,11 @@ run(void)
 			if (ev.xexpose.count == 0)
 				drw_map(drw, win, 0, 0, mw, mh);
 			break;
+		case FocusIn:
+			/* regrab focus from parent window */
+			if (ev.xfocus.window != win)
+				grabfocus();
+			break;
 		case KeyPress:
 			keypress(&ev.xkey);
 			break;
@@ -558,7 +582,7 @@ setup(void)
 	lines = MAX(lines, 0);
 	mh = (lines + 1) * bh;
 #ifdef XINERAMA
-	if ((info = XineramaQueryScreens(dpy, &n))) {
+	if (parentwin == root && (info = XineramaQueryScreens(dpy, &n))) {
 		XGetInputFocus(dpy, &w, &di);
 		if (mon >= 0 && mon < n)
 			i = mon;
@@ -589,9 +613,12 @@ setup(void)
 	} else
 #endif
 	{
+		if (!XGetWindowAttributes(dpy, parentwin, &wa))
+			die("could not get embedding window attributes: 0x%lx",
+			    parentwin);
 		x = dmx;
-		y = topbar ? dmy : sh - (mh + 2) - dmy;
-		mw = (dmw>0 ? dmw : sw - 2);
+		y = topbar ? dmy : wa.height - (mh + 2) - dmy;
+		mw = dmw > 0 ? dmw : wa.width - 2;
 	}
 	promptw = (prompt && *prompt) ? TEXTW(prompt) - lrpad / 4 : 0;
 	inputw = MIN(inputw, mw/3);
@@ -602,11 +629,10 @@ setup(void)
 	swa.background_pixel = scheme[SchemeNorm][ColBg].pixel;
 	swa.border_pixel = scheme[SchemeSel][ColBg].pixel;
 	swa.event_mask = ExposureMask | KeyPressMask | VisibilityChangeMask;
-	win = XCreateWindow(dpy, root, x, y, mw, mh, 0,
-			DefaultDepth(dpy, screen), CopyFromParent,
-			DefaultVisual(dpy, screen),
-			CWOverrideRedirect | CWBackPixel | CWBorderPixel | CWEventMask,
-			&swa);
+	win = XCreateWindow(dpy, parentwin, x, y, mw, mh, 0,
+	                    CopyFromParent, CopyFromParent, CopyFromParent,
+	                    CWOverrideRedirect | CWBackPixel | CWBorderPixel | CWEventMask,
+                        &swa);
 	wch.border_width = 1;
 	XConfigureWindow(dpy, win, CWBorderWidth, &wch);
 
@@ -616,6 +642,15 @@ setup(void)
 	                XNClientWindow, win, XNFocusWindow, win, NULL);
 
 	XMapRaised(dpy, win);
+	if (embed) {
+		XSelectInput(dpy, parentwin, FocusChangeMask);
+		if (XQueryTree(dpy, parentwin, &dw, &w, &dws, &du) && dws) {
+			for (i = 0; i < du && dws[i] != win; ++i)
+				XSelectInput(dpy, dws[i], FocusChangeMask);
+			XFree(dws);
+		}
+		grabfocus();
+	}
 	drw_resize(drw, mw, mh);
 	drawmenu();
 }
@@ -623,15 +658,16 @@ setup(void)
 static void
 usage(void)
 {
-	fputs("usage: dmenu [-b] [-f] [-i] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
-	      "             [-x xoffset] [-y yoffset] [-w width]\n"
-	      "             [-nb color] [-nf color] [-sb color] [-sf color] [-v]\n", stderr);
+	fputs("usage: dmenu [-bfiv] [-l lines] [-p prompt] [-fn font] [-m monitor]\n"
+	      "             [-x xoffset] [-y yoffset] [-W width] [-w windowid]\n"
+	      "             [-nb color] [-nf color] [-sb color] [-sf color]\n", stderr);
 	exit(1);
 }
 
 int
 main(int argc, char *argv[])
 {
+	XWindowAttributes wa;
 	int i, fast = 0;
 
 	for (i = 1; i < argc; i++)
@@ -657,7 +693,7 @@ main(int argc, char *argv[])
 			dmx = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "-y"))   /* window y offset (from bottom up if -b) */
 			dmy = atoi(argv[++i]);
-		else if (!strcmp(argv[i], "-w"))   /* make dmenu this wide */
+		else if (!strcmp(argv[i], "-W"))   /* make dmenu this wide */
 			dmw = atoi(argv[++i]);
 		else if (!strcmp(argv[i], "-m"))
 			mon = atoi(argv[++i]);
@@ -673,6 +709,8 @@ main(int argc, char *argv[])
 			colors[SchemeSel][ColBg] = argv[++i];
 		else if (!strcmp(argv[i], "-sf"))  /* selected foreground color */
 			colors[SchemeSel][ColFg] = argv[++i];
+		else if (!strcmp(argv[i], "-w"))   /* embedding window id */
+			embed = argv[++i];
 		else
 			usage();
 
@@ -682,9 +720,12 @@ main(int argc, char *argv[])
 		die("cannot open display");
 	screen = DefaultScreen(dpy);
 	root = RootWindow(dpy, screen);
-	sw = DisplayWidth(dpy, screen);
-	sh = DisplayHeight(dpy, screen);
-	drw = drw_create(dpy, screen, root, sw, sh);
+	if (!embed || !(parentwin = strtol(embed, NULL, 0)))
+		parentwin = root;
+	if (!XGetWindowAttributes(dpy, parentwin, &wa))
+		die("could not get embedding window attributes: 0x%lx",
+		    parentwin);
+	drw = drw_create(dpy, screen, root, wa.width, wa.height);
 	if (!drw_fontset_create(drw, fonts, LENGTH(fonts)))
 		die("no fonts could be loaded.");
 	lrpad = drw->fonts->h;
