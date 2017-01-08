@@ -231,7 +231,7 @@ match(void)
 	len = tokc ? strlen(tokv[0]) : 0;
 
 	matches = lprefix = lsubstr = matchend = prefixend = substrend = NULL;
-	textsize = strlen(text);
+	textsize = strlen(text) + 1;
 	for (item = items; item && item->text; item++) {
 		for (i = 0; i < tokc; i++)
 			if (!fstrstr(item->text, tokv[i]))
@@ -557,16 +557,17 @@ run(void)
 static void
 setup(void)
 {
-	int x, y;
+	int x, y, i = 0;
+	unsigned int du;
 	XSetWindowAttributes swa;
 	XWindowChanges wch;
 	XIM xim;
+	Window w, dw, *dws;
+	XWindowAttributes wa;
 #ifdef XINERAMA
 	XineramaScreenInfo *info;
-	Window w, pw, dw, *dws;
-	XWindowAttributes wa;
-	int a, j, di, n, i = 0, area = 0;
-	unsigned int du;
+	Window pw;
+	int a, j, di, n, area = 0;
 #endif
 
 	/* init appearance */
